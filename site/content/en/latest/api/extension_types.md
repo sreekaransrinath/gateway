@@ -1317,6 +1317,7 @@ _Appears in:_
 | `value` | _integer_ |  false  |  | Value of the maximum concurrent connections limit.<br />When the limit is reached, incoming connections will be closed after the CloseDelay duration. |
 | `closeDelay` | _[Duration](https://gateway-api.sigs.k8s.io/reference/api-spec/1.5/spec/#duration)_ |  false  |  | CloseDelay defines the delay to use before closing connections that are rejected<br />once the limit value is reached.<br />Default: none. |
 | `maxConnectionDuration` | _[Duration](https://gateway-api.sigs.k8s.io/reference/api-spec/1.5/spec/#duration)_ |  false  |  | MaxConnectionDuration is the maximum amount of time a connection can remain established<br />(usually via TCP/HTTP Keepalive packets) before being drained and/or closed.<br />If not specified, there is no limit. |
+| `maxConnectionDurationJitter` | _integer_ |  false  |  | MaxConnectionDurationJitter adds a random extra amount of time to each connection's<br />MaxConnectionDuration, up to this percentage of that duration. This keeps connections<br />opened together from expiring at the same moment. Requires MaxConnectionDuration.<br />If not specified, no jitter is added. |
 | `maxRequestsPerConnection` | _integer_ |  false  |  | MaxRequestsPerConnection defines the maximum number of requests allowed over a single connection.<br />If not specified, there is no limit. Setting this parameter to 1 will effectively disable keep alive. |
 | `maxStreamDuration` | _[Duration](https://gateway-api.sigs.k8s.io/reference/api-spec/1.5/spec/#duration)_ |  false  |  | MaxStreamDuration is the maximum amount of time to keep alive an http stream. When the limit is reached<br />the stream will be reset independent of any other timeouts. If not specified, no value is set. |
 
@@ -2909,6 +2910,25 @@ _Appears in:_
 | `minEndpointsInZoneThreshold` | _integer_ |  false  |  | MinEndpointsInZoneThreshold is the minimum number of upstream endpoints in the local zone required to honor the forceLocalZone<br />override. This is useful for protecting zones with fewer endpoints. |
 
 
+#### ForwardProtoConfig
+
+
+
+ForwardProtoConfig configures the ports used to infer the x-forwarded-proto
+header from the PROXY protocol destination port. When the restored local address
+(populated by the PROXY protocol listener filter) has a destination port matching
+one of these lists, the x-forwarded-proto header is set to the corresponding scheme.
+At least one of httpsDestinationPorts or httpDestinationPorts must be set.
+
+_Appears in:_
+- [ProxyProtocolSettings](#proxyprotocolsettings)
+
+| Field | Type | Required | Default | Description |
+| ---   | ---  | ---      | ---     | ---         |
+| `httpsDestinationPorts` | _integer array_ |  false  |  | HTTPSDestinationPorts are the destination ports treated as HTTPS.<br />When the PROXY protocol destination port matches one of these, the<br />x-forwarded-proto header is set to "https".<br />Common values: 443, 8443. |
+| `httpDestinationPorts` | _integer array_ |  false  |  | HTTPDestinationPorts are the destination ports treated as HTTP.<br />When the PROXY protocol destination port matches one of these, the<br />x-forwarded-proto header is set to "http".<br />Common values: 80, 8080. |
+
+
 #### GRPCActiveHealthChecker
 
 
@@ -3559,6 +3579,7 @@ _Appears in:_
 | `credentialInjection` | _[HTTPCredentialInjectionFilter](#httpcredentialinjectionfilter)_ |  false  |  |  |
 | `requestMirror` | _[HTTPRequestMirrorFilter](#httprequestmirrorfilter)_ |  false  |  | RequestMirror defines configuration for request mirroring modifiers.<br />This configuration works together with the Gateway API RequestMirror filter<br />on the attached HTTPRoute rule. |
 | `matches` | _[HTTPRouteMatchFilter](#httproutematchfilter) array_ |  false  |  | Matches defines additional matching criteria for the HTTPRoute rule.<br />As with HTTPRouteRule.Matches, the rule is matched if any one match applies.<br />When both HTTPRouteRule.Matches and HTTPRouteFilter.Matches are set, the<br />effective matching is the logical AND of the two sets. |
+| `backendPriority` | _integer_ |  false  |  | BackendPriority sets the Envoy locality priority of the endpoints belonging to the<br />backendRef this filter is attached to, enabling priority-based failover between the<br />backendRefs of a single route rule. 0 is the highest priority.<br />Envoy sends traffic to the lowest priority value that has enough healthy endpoints,<br />and only spills over to the next value as that health degrades. It is highly<br />recommended to configure active or passive health checks so that failover can be<br />detected when the higher priority backends become unhealthy.<br />This overrides the priority derived from the referenced Backend's fallback field.<br />For additional details, see<br />https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/priority<br />This filter is only valid when referenced from a backendRef's filters. Referencing it<br />from a route rule's filters is rejected: a rule-level filter applies uniformly to every<br />backendRef of the rule, and a uniform priority carries no failover meaning. |
 
 
 #### HTTPRouteMatchFilter
@@ -5204,6 +5225,7 @@ _Appears in:_
 | `force` | _[ForceLocalZone](#forcelocalzone)_ |  false  |  | ForceLocalZone defines override configuration for forcing all traffic to stay within the local zone instead of the default behavior<br />which maintains equal distribution among upstream endpoints while sending as much traffic as possible locally. |
 | `minEndpointsThreshold` | _integer_ |  false  |  | MinEndpointsThreshold is the minimum number of total upstream endpoints across all zones required to enable zone-aware routing. |
 | `percentageEnabled` | _integer_ |  false  |  | Configures percentage of requests that will be considered for zone aware routing if zone aware routing is configured. If not specified, Envoy defaults to 100%. |
+| `failTrafficOnPanic` | _boolean_ |  false  |  | FailTrafficOnPanic rejects traffic instead of routing to all endpoints when the<br />cluster is in panic mode. Panic mode is entered when the share of healthy endpoints<br />drops below HealthCheck.PanicThreshold, and by default Envoy then load balances<br />across every endpoint, healthy or not. Setting this to true makes Envoy fail the<br />requests instead, applying backpressure to clients and giving the backend room to<br />recover.<br />Defaults to false. |
 
 
 #### Principal
@@ -5613,6 +5635,7 @@ _Appears in:_
 | Field | Type | Required | Default | Description |
 | ---   | ---  | ---      | ---     | ---         |
 | `optional` | _boolean_ |  false  |  | Optional allows requests without a Proxy Protocol header to be proxied.<br />If set to true, the listener will accept requests without a Proxy Protocol header.<br />If set to false, the listener will reject requests without a Proxy Protocol header.<br />If not set, the default behavior is to reject requests without a Proxy Protocol header.<br />Warning: Optional breaks conformance with the specification. Only enable if ALL traffic to the listener comes from a trusted source.<br />For more information on security implications, see haproxy.org/download/2.1/doc/proxy-protocol.txt |
+| `forwardProtoConfig` | _[ForwardProtoConfig](#forwardprotoconfig)_ |  false  |  | ForwardProtoConfig infers the x-forwarded-proto header from the PROXY protocol<br />destination port. Only takes effect when PROXY protocol is enabled.<br />This is useful when a Layer 4 load balancer (such as AWS NLB) terminates TLS and<br />forwards traffic to Envoy over PROXY protocol, so that Envoy can set the correct<br />scheme for the forwarded request. |
 
 
 #### ProxyProtocolVersion

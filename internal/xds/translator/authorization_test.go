@@ -20,7 +20,7 @@ import (
 	"github.com/envoyproxy/gateway/internal/ir"
 )
 
-func cidrRule() *ir.AuthorizationRule {
+func denyCIDRRule() *ir.AuthorizationRule {
 	return &ir.AuthorizationRule{
 		Name:   "cidr",
 		Action: egv1a1.AuthorizationActionDeny,
@@ -116,42 +116,42 @@ func Test_authIndependentPrefix(t *testing.T) {
 		{
 			name: "all rules are authentication-independent",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{geoRule(), cidrRule()},
+				Rules: []*ir.AuthorizationRule{geoRule(), denyCIDRRule()},
 			},
 			want: []string{"geo", "cidr"},
 		},
 		{
 			name: "prefix stops at the first jwt rule",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{geoRule(), jwtRule(), cidrRule()},
+				Rules: []*ir.AuthorizationRule{geoRule(), jwtRule(), denyCIDRRule()},
 			},
 			want: []string{"geo"},
 		},
 		{
 			name: "prefix stops at the first header rule",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{cidrRule(), headerRule(), geoRule()},
+				Rules: []*ir.AuthorizationRule{denyCIDRRule(), headerRule(), geoRule()},
 			},
 			want: []string{"cidr"},
 		},
 		{
 			name: "prefix stops at the first CEL rule",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{cidrRule(), celRule(), geoRule()},
+				Rules: []*ir.AuthorizationRule{denyCIDRRule(), celRule(), geoRule()},
 			},
 			want: []string{"cidr"},
 		},
 		{
 			name: "prefix stops at the first operation rule",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{cidrRule(), operationRule(), geoRule()},
+				Rules: []*ir.AuthorizationRule{denyCIDRRule(), operationRule(), geoRule()},
 			},
 			want: []string{"cidr"},
 		},
 		{
 			name: "prefix stops at an operation allow rule and does not pick a later CIDR deny",
 			authorization: &ir.Authorization{
-				Rules: []*ir.AuthorizationRule{operationAllow, cidrRule()},
+				Rules: []*ir.AuthorizationRule{operationAllow, denyCIDRRule()},
 			},
 			want: []string{},
 		},
@@ -195,7 +195,7 @@ func Test_isPreAuthRule(t *testing.T) {
 		want bool
 	}{
 		{name: "empty principal", rule: &ir.AuthorizationRule{}, want: true},
-		{name: "client CIDRs", rule: cidrRule(), want: true},
+		{name: "client CIDRs", rule: denyCIDRRule(), want: true},
 		{name: "client IP geo locations", rule: geoRule(), want: true},
 		{name: "JWT", rule: jwtRule(), want: false},
 		{name: "headers", rule: headerRule(), want: false},
@@ -204,7 +204,7 @@ func Test_isPreAuthRule(t *testing.T) {
 		{
 			name: "path only",
 			rule: &ir.AuthorizationRule{
-				Principal: cidrRule().Principal,
+				Principal: denyCIDRRule().Principal,
 				Operation: &egv1a1.Operation{Path: &egv1a1.PathMatch{Value: "/old"}},
 			},
 			want: false,
@@ -212,7 +212,7 @@ func Test_isPreAuthRule(t *testing.T) {
 		{
 			name: "method only",
 			rule: &ir.AuthorizationRule{
-				Principal: cidrRule().Principal,
+				Principal: denyCIDRRule().Principal,
 				Operation: &egv1a1.Operation{Methods: []gwapiv1.HTTPMethod{gwapiv1.HTTPMethodGet}},
 			},
 			want: false,
@@ -287,7 +287,7 @@ func Test_routeNeedsPreAuthRBAC(t *testing.T) {
 						{
 							Name:      "allow-cidr",
 							Action:    egv1a1.AuthorizationActionAllow,
-							Principal: cidrRule().Principal,
+							Principal: denyCIDRRule().Principal,
 						},
 						jwtRule(),
 					}},
@@ -304,7 +304,7 @@ func Test_routeNeedsPreAuthRBAC(t *testing.T) {
 						{
 							Name:      "allow-cidr",
 							Action:    egv1a1.AuthorizationActionAllow,
-							Principal: cidrRule().Principal,
+							Principal: denyCIDRRule().Principal,
 						},
 						geoRule(),
 						jwtRule(),
@@ -318,7 +318,7 @@ func Test_routeNeedsPreAuthRBAC(t *testing.T) {
 			route: &ir.HTTPRoute{
 				Security: &ir.SecurityFeatures{
 					OIDC:          &ir.OIDC{},
-					Authorization: &ir.Authorization{Rules: []*ir.AuthorizationRule{operationRule(), cidrRule()}},
+					Authorization: &ir.Authorization{Rules: []*ir.AuthorizationRule{operationRule(), denyCIDRRule()}},
 				},
 			},
 			want: false,
@@ -360,7 +360,7 @@ func Test_rbacPatchRoute(t *testing.T) {
 							},
 						},
 					},
-					cidrRule(),
+					denyCIDRRule(),
 				},
 			},
 		},
